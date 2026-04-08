@@ -1,1 +1,73 @@
+name: Ubuntu & Internet Income
 
+on:
+  workflow_dispatch: # Cho phép nhấn nút chạy thủ công
+  schedule:
+    - cron: '0 */6 * * *' # Tự động chạy lại sau mỗi 6 tiếng (7h sáng, 1h chiều, 7h tối, 1h đêm giờ VN)
+
+jobs:
+  ubuntu:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v4
+
+      - name: Cài đặt hệ thống và Tailscale
+        run: |
+          sudo apt update -y
+          sudo apt install git wget docker-compose unzip -y
+          # Cài đặt Tailscale
+          curl -fsSL https://tailscale.com/install.sh | sh
+          # Kết nối vào mạng Tailscale của bạn
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --ssh --hostname=github-runner
+
+      - name: Chạy Internet Income
+        run: |
+          # Tải và giải nén source code
+          wget -O main.zip https://github.com/engageub/InternetIncome/archive/refs/heads/main.zip
+          unzip -o main.zip
+          cd InternetIncome-main
+          
+          # Tạo danh sách proxy
+          cat <<EOF > proxies.txt
+          socks5://giang:123456@42.113.136.185:25165
+          socks5://giang:123456@42.113.136.12:25642
+          socks5://giang:123456@1.52.178.239:25892
+          socks5://giang:123456@42.113.136.211:26305
+          socks5://giang:123456@1.52.178.244:29888
+          socks5://giang:123456@42.112.194.41:41531
+          socks5://giang:123456@58.187.217.10:41971
+          socks5://giang:123456@42.112.188.157:42105
+          socks5://giang:123456@58.187.170.9:42551
+          socks5://giang:123456@183.80.6.155:44423
+          socks5://giang:123456@1.52.178.27:24169
+          socks5://giang:123456@58.186.170.0:28404
+          socks5://giang:123456@183.81.104.16:28622
+          socks5://giang:123456@42.117.118.166:31842
+          socks5://giang:123456@58.187.195.35:38260
+          socks5://giang:123456@183.80.45.2:40370
+          socks5://giang:123456@183.80.28.36:21496
+          socks5://giang:123456@183.80.41.161:21518
+          socks5://giang:123456@58.186.63.33:22424
+          socks5://giang:123456@58.187.23.159:23871
+          socks5://giang:123456@118.68.233.33:27361
+          socks5://giang:123456@58.186.63.87:17258
+          socks5://giang:123456@58.187.212.196:17831
+          socks5://giang:123456@58.186.88.43:44713
+          EOF
+          
+          # Cấu hình tự động lấy thông tin từ Secrets
+          sed -i "s/USE_PROXIES=false/USE_PROXIES=true/g" properties.conf
+          sed -i "s/WIPTER_EMAIL=/WIPTER_EMAIL=${{ secrets.WIPTER_EMAIL }}/g" properties.conf
+          sed -i "s/WIPTER_PASSWORD=/WIPTER_PASSWORD=${{ secrets.WIPTER_PASSWORD }}/g" properties.conf
+          
+          # Bắt đầu chạy
+          sudo bash internetIncome.sh --start
+
+      - name: Duy trì tiến trình (Looping)
+        run: |
+          # Giữ cho runner không bị ngắt giữa chừng
+          curl -fsSL https://github.com/Efebey2903/Docker-VNC/raw/main/loop.sh | sh
